@@ -38,7 +38,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"1.1.3-c"
+#define PLUGIN_VERSION				"1.1.4"
 #define SENDER_WORLD					0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
 #define MAXLENGTH_NAME				64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
@@ -52,7 +52,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 
 #define ADDSTRING(%1) SetTrieValue(g_hChatFormats, %1, 1)
 
-#define UPDATE_URL "http://dl.dropbox.com/u/83581539/scp/scp_updater.txt"
+#define UPDATE_URL "http://dev.xadgaming.com/simple-chat-processor/raw/master/updater.txt"
 
 enum eMods
 {
@@ -239,7 +239,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	Get the sender of the usermessage and bug out if it is not a player
 	*/
 	new bProtobuf = (GetUserMessageType() == UM_Protobuf ? true : false);
-	decl cpSender;
+	new cpSender;
 	if (bProtobuf)
 	{
 		cpSender = PbReadInt(bf, "ent_idx");
@@ -257,7 +257,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	/**
 	Get the chat bool.  This determines if sent to console as well as chat
 	*/
-	decl bool:bChat;
+	new bool:bChat;
 	if (bProtobuf)
 	{
 		bChat = PbReadBool(bf, "chat");
