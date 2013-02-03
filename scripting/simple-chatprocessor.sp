@@ -38,7 +38,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"1.1.4"
+#define PLUGIN_VERSION				"1.1.4-fix"
 #define SENDER_WORLD					0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
 #define MAXLENGTH_NAME				64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
@@ -238,7 +238,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	/**
 	Get the sender of the usermessage and bug out if it is not a player
 	*/
-	new bProtobuf = (GetUserMessageType() == UM_Protobuf ? true : false);
+	new bool:bProtobuf = (CanTestFeatures() && GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf);
 	new cpSender;
 	if (bProtobuf)
 	{
