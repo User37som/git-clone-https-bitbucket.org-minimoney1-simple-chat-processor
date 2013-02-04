@@ -4,10 +4,10 @@
 	{
 		"Version"
 		{
-			"Latest"	"1.1.4-fix"
+			"Latest"	"1.1.4-fix2"
 		}
 		
-		"Notes"		"Fixed 1.5 dependency."
+		"Notes"		"Fixed 1.5 dependency... again"
 	}
 	
 	"Files"
