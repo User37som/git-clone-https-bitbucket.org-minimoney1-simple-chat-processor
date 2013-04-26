@@ -38,17 +38,17 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"1.1.4-fix2"
-#define SENDER_WORLD					0
+#define PLUGIN_VERSION				"1.1.5"
+#define SENDER_WORLD			0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
-#define MAXLENGTH_NAME				64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
+#define MAXLENGTH_NAME			64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
 #define MAXLENGTH_MESSAGE		256		// This is based upon the SDK and the length of the entire message, including tags, name, : etc.
 
 #define CHATFLAGS_INVALID		0
-#define CHATFLAGS_ALL				(1<<0)
-#define CHATFLAGS_TEAM				(1<<1)
-#define CHATFLAGS_SPEC				(1<<2)
-#define CHATFLAGS_DEAD				(1<<3)
+#define CHATFLAGS_ALL			(1 << 0)
+#define CHATFLAGS_TEAM			(1 << 1)
+#define CHATFLAGS_SPEC			(1 << 2)
+#define CHATFLAGS_DEAD			(1 << 3)
 
 #define ADDSTRING(%1) SetTrieValue(g_hChatFormats, %1, 1)
 
@@ -317,7 +317,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	decl String:cpSender_Name[MAXLENGTH_NAME];
 	if (bProtobuf)
 	{
-		PbReadRepeatedString(bf, "params", 0, cpSender_Name, sizeof(cpSender_Name));
+		PbReadString(bf, "params", cpSender_Name, sizeof(cpSender_Name), 0);
 	}
 	else if (BfGetNumBytesLeft(bf))
 	{
@@ -330,7 +330,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	decl String:cpMessage[MAXLENGTH_INPUT];
 	if (bProtobuf)
 	{
-		PbReadRepeatedString(bf, "params", 1, cpMessage, sizeof(cpMessage));
+		PbReadString(bf, "params", cpMessage, sizeof(cpMessage), 1);
 	}
 	else if (BfGetNumBytesLeft(bf))
 	{
@@ -426,7 +426,6 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	WritePackString(cpPack, cpMessage);
 	PushArrayCell(g_hDPArray, cpPack);
 	WritePackCell(cpPack, bProtobuf);
-	ResetPack(cpPack);
 
 	CloseHandle(cpRecipients);
 	
@@ -441,6 +440,7 @@ public OnGameFrame()
 	for (new i = 0; i < GetArraySize(g_hDPArray); i++)
 	{
 		new Handle:pack = GetArrayCell(g_hDPArray, i);
+		ResetPack(pack);
 		new client = ReadPackCell(pack);
 		new numClientsStart = ReadPackCell(pack);
 		new numClientsFinish;
@@ -555,7 +555,7 @@ public Config_End(Handle:parser, bool:halted, bool:failed)
 
 stock eMods:GetCurrentMod()
 {
-	new String:sGameType[64];
+	decl String:sGameType[64];
 	GetGameFolderName(sGameType, sizeof(sGameType));
 	
 	if (StrEqual(sGameType, "aoc", false))
