@@ -38,7 +38,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"1.1.5"
+#define PLUGIN_VERSION				"2.0.0"
 #define SENDER_WORLD			0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
 #define MAXLENGTH_NAME			64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
@@ -71,7 +71,7 @@ enum eMods
 	GameType_SGTLS,
 	GameType_TF,
 	GameType_DM,
-	GameType_ZPS
+	GameType_ZPS,
 };
 
 new Handle:g_hDPArray = INVALID_HANDLE;
@@ -100,6 +100,7 @@ new String:g_sGameName[eMods][32] =
 new Handle:g_hChatFormats = INVALID_HANDLE;
 new Handle:g_fwdOnChatMessage;
 
+new bool:g_bSayText2;
 new	bool:g_bAutoUpdate;
 
 new g_CurrentChatType = CHATFLAGS_INVALID;
@@ -137,37 +138,54 @@ public OnPluginStart()
 	new UserMsg:umSayText2 = GetUserMessageId("SayText2");
 	if (umSayText2 != INVALID_MESSAGE_ID)
 	{
+		g_bSayText2 = true;
 		HookUserMessage(umSayText2, OnSayText2, true);
 	}
 	else
 	{
-		LogError("[SCP] This mod appears not to support SayText2.  Plugin disabled.");
-		SetFailState("Error hooking usermessage saytext2");	
+		new UserMsg:umSayText = GetUserMessageId("SayText");
+		if (umSayText != INVALID_MESSAGE_ID)
+		{
+			if (g_CurrentMod != GameType_DOD)
+			{
+				SetFailState("Unsupported game");
+			}
+			g_bSayText2 = false;
+			HookUserMessage(umSayText, OnSayText, true);
+		}
+		else
+		{
+			LogError("[SCP] This mod appears not to support SayText2 or SayText.  Plugin disabled.");
+			SetFailState("Error hooking usermessage saytext2 and saytext");	
+		}
 	}
 	
 	/**
 	Get mod type and load the correct translation file
 	*/
-	decl String:sGameDir[32];
-	decl String:sTranslationFile[PLATFORM_MAX_PATH];
-	decl String:sTranslationLocation[PLATFORM_MAX_PATH];
-	GetGameFolderName(sGameDir, sizeof(sGameDir));
-	Format(sTranslationFile, sizeof(sTranslationFile), "scp.%s.phrases", sGameDir);
-	BuildPath(Path_SM, sTranslationLocation, sizeof(sTranslationLocation), "translations/%s.txt", sTranslationFile);
-	if (FileExists(sTranslationLocation))
+	if(g_bSayText2)
 	{
-		LogMessage("[SCP] Loading translation file [%s].", sTranslationFile);
-		LoadTranslations(sTranslationFile);
-		if (!GetChatFormats(sTranslationLocation))
+		decl String:sGameDir[32];
+		decl String:sTranslationFile[PLATFORM_MAX_PATH];
+		decl String:sTranslationLocation[PLATFORM_MAX_PATH];
+		GetGameFolderName(sGameDir, sizeof(sGameDir));
+		Format(sTranslationFile, sizeof(sTranslationFile), "scp.%s.phrases", sGameDir);
+		BuildPath(Path_SM, sTranslationLocation, sizeof(sTranslationLocation), "translations/%s.txt", sTranslationFile);
+		if (FileExists(sTranslationLocation))
 		{
-			LogError("[SCP] Could not parse the translation file");
-			SetFailState("Could not parse the translation file");
+			LogMessage("[SCP] Loading translation file [%s].", sTranslationFile);
+			LoadTranslations(sTranslationFile);
+			if (!GetChatFormats(sTranslationLocation))
+			{
+				LogError("[SCP] Could not parse the translation file");
+				SetFailState("Could not parse the translation file");
+			}
 		}
-	}
-	else
-	{
-		LogError("[SCP] Translation file is not present");
-		SetFailState("Translation file is not present");
+		else
+		{
+			LogError("[SCP] Translation file is not present");
+			SetFailState("Translation file is not present");
+		}
 	}
 
 	/**
@@ -317,7 +335,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	decl String:cpSender_Name[MAXLENGTH_NAME];
 	if (bProtobuf)
 	{
-		PbReadString(bf, "params", cpSender_Name, sizeof(cpSender_Name), 0);
+		PbReadString(bf, "params", cpSender_Name, sizeof(cpSender_Name));
 	}
 	else if (BfGetNumBytesLeft(bf))
 	{
@@ -330,7 +348,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	decl String:cpMessage[MAXLENGTH_INPUT];
 	if (bProtobuf)
 	{
-		PbReadString(bf, "params", cpMessage, sizeof(cpMessage), 1);
+		PbReadString(bf, "params", cpMessage, sizeof(cpMessage));
 	}
 	else if (BfGetNumBytesLeft(bf))
 	{
@@ -435,57 +453,271 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	return Plugin_Handled;
 }
 
+public Action:OnSayText(UserMsg:msg_id, Handle:bf, const clients[], numClients, bool:reliable, bool:init)
+{
+	/**
+	Get the sender of the usermessage and bug out if it is not a player
+	*/
+	new bool:bProtobuf = (CanTestFeatures() && GetFeatureStatus(FeatureType_Native, "GetUserMessageType") == FeatureStatus_Available && GetUserMessageType() == UM_Protobuf);
+	new cpSender;
+	if (bProtobuf)
+	{
+		cpSender = PbReadInt(bf, "ent_idx");
+	}
+	else
+	{
+		cpSender = BfReadByte(bf);
+	}
+
+	if (cpSender == SENDER_WORLD)
+	{
+		return Plugin_Continue;
+	}
+	
+	/**
+	Get the chat message
+	*/
+	decl String:message[MAXLENGTH_INPUT];
+	if (bProtobuf)
+	{
+		PbReadString(bf, "text", message, sizeof(message));
+	}
+	else
+	{
+		BfReadString(bf, message, sizeof(message));
+	}
+	
+	/**
+	Get the chat bool.  This determines if sent to console as well as chat
+	*/
+	if (!bProtobuf)
+	{
+		BfReadBool(bf);
+	}
+	
+	/**
+	Store the clients in an array so the call can manipulate it.
+	*/
+	new Handle:cpRecipients = CreateArray();
+	for (new i = 0; i < numClients; i++)
+	{
+		PushArrayCell(cpRecipients, clients[i]);
+	}
+	
+	decl String:prefix[64], String:senderName[MAX_NAME_LENGTH], String:textMessage[MAXLENGTH_MESSAGE], String:buffer[MAXLENGTH_INPUT];
+	GetClientName(cpSender, senderName, sizeof(senderName));
+	Format(buffer, sizeof(buffer), "%s:", senderName);
+	new pos = StrContains(message, buffer);
+	
+	if (pos == 0)
+	{
+		prefix[0] = '\0';
+	}
+	else
+	{
+		Format(prefix, pos + 1, "%s ", message);
+	}
+	
+	g_CurrentChatType = CHATFLAGS_INVALID;
+	
+	if (StrContains(prefix, "(Team)") != -1)
+	{
+		g_CurrentChatType |= CHATFLAGS_TEAM;
+	}
+	if (GetClientTeam(cpSender) <= 1)
+	{
+		g_CurrentChatType |= CHATFLAGS_SPEC;
+	}
+	if (StrContains(prefix, "(Dead)") != -1)
+	{
+		g_CurrentChatType |= CHATFLAGS_DEAD;
+	}
+	
+	if (g_CurrentChatType == CHATFLAGS_INVALID)
+	{
+		g_CurrentChatType = CHATFLAGS_ALL;
+	}
+	
+	ReplaceString(message, sizeof(message), "\n", "");
+	strcopy(textMessage, sizeof(textMessage), message[pos + strlen(senderName) + 2]);
+	
+	/**
+	Start the forward for other plugins
+	*/
+	new Action:fResult;
+	Call_StartForward(g_fwdOnChatMessage);
+	Call_PushCellRef(cpSender);
+	Call_PushCell(cpRecipients);
+	Call_PushStringEx(senderName, sizeof(senderName), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	Call_PushStringEx(textMessage, sizeof(textMessage), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
+	new fError = Call_Finish(fResult);
+	
+	g_CurrentChatType = CHATFLAGS_INVALID;
+	
+	if (fError != SP_ERROR_NONE)
+	{
+		ThrowNativeError(fError, "Forward failed");
+		CloseHandle(cpRecipients);
+		return Plugin_Continue;
+	}
+	else if (fResult == Plugin_Continue)
+	{
+		CloseHandle(cpRecipients);
+		return Plugin_Continue;
+	}
+	else if (fResult >= Plugin_Handled)
+	{
+		CloseHandle(cpRecipients);
+		return Plugin_Handled;
+	}
+	
+	GetClientName(cpSender, buffer, sizeof(buffer));
+	if (StrEqual(senderName, buffer))
+	{
+		Format(senderName, sizeof(senderName), "\x03%s", senderName);
+	}
+	
+	/**
+	Create a timer to print the message on the next gameframe
+	*/
+	new Handle:cpPack = CreateDataPack();
+
+	new numRecipients = GetArraySize(cpRecipients);
+	
+	WritePackCell(cpPack, cpSender);
+
+	for (new i = 0; i < numRecipients; i++)
+	{
+		new x = GetArrayCell(cpRecipients, i);
+		if (!IsValidClient(x))
+		{
+			numRecipients--;
+			RemoveFromArray(cpRecipients, i);
+		}
+	}
+	
+	WritePackCell(cpPack, numRecipients);
+	
+	for (new i = 0; i < numRecipients; i++)
+	{
+		new x = GetArrayCell(cpRecipients, i);
+		WritePackCell(cpPack, x);
+	}
+	
+	WritePackString(cpPack, prefix);
+	WritePackString(cpPack, senderName);
+	WritePackString(cpPack, textMessage);
+	PushArrayCell(g_hDPArray, cpPack);
+	WritePackCell(cpPack, bProtobuf);
+
+	CloseHandle(cpRecipients);
+	
+	/**
+	Stop the original message
+	*/
+	return Plugin_Handled;
+}
+
 public OnGameFrame()
 {
 	for (new i = 0; i < GetArraySize(g_hDPArray); i++)
 	{
 		new Handle:pack = GetArrayCell(g_hDPArray, i);
 		ResetPack(pack);
-		new client = ReadPackCell(pack);
-		new numClientsStart = ReadPackCell(pack);
-		new numClientsFinish;
-		new clients[numClientsStart];
-
-		for (new x = 0; x < numClientsStart; x++)
+		if (g_bSayText2)
 		{
-			new buffer = ReadPackCell(pack);
-			if (IsValidClient(buffer))
+			new client = ReadPackCell(pack);
+			new numClientsStart = ReadPackCell(pack);
+			new numClientsFinish;
+			new clients[numClientsStart];
+
+			for (new x = 0; x < numClientsStart; x++)
 			{
-				clients[numClientsFinish++] = buffer;
+				new buffer = ReadPackCell(pack);
+				if (IsValidClient(buffer))
+				{
+					clients[numClientsFinish++] = buffer;
+				}
 			}
-		}
-		
-		new bool:bChat = bool:ReadPackCell(pack);
-		decl String:sChatType[32];
-		decl String:sSenderName[MAXLENGTH_NAME];
-		decl String:sMessage[MAXLENGTH_INPUT];
-		ReadPackString(pack, sChatType, sizeof(sChatType));
-		ReadPackString(pack, sSenderName, sizeof(sSenderName));
-		ReadPackString(pack, sMessage, sizeof(sMessage));
-		
-		decl String:sTranslation[MAXLENGTH_MESSAGE];
-		Format(sTranslation, sizeof(sTranslation), "%t", sChatType, sSenderName, sMessage);
-		
-		new Handle:bf = StartMessage("SayText2", clients, numClientsFinish, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
-		
-		if (ReadPackCell(pack))
-		{
-			PbSetInt(bf, "ent_idx", client);
-			PbSetBool(bf, "chat", bChat);
+			
+			new bool:bChat = bool:ReadPackCell(pack);
+			decl String:sChatType[32];
+			decl String:sSenderName[MAXLENGTH_NAME];
+			decl String:sMessage[MAXLENGTH_INPUT];
+			ReadPackString(pack, sChatType, sizeof(sChatType));
+			ReadPackString(pack, sSenderName, sizeof(sSenderName));
+			ReadPackString(pack, sMessage, sizeof(sMessage));
+			
+			decl String:sTranslation[MAXLENGTH_MESSAGE];
+			Format(sTranslation, sizeof(sTranslation), "%t", sChatType, sSenderName, sMessage);
+			
+			new Handle:bf = StartMessage("SayText2", clients, numClientsFinish, USERMSG_RELIABLE | USERMSG_BLOCKHOOKS);
+			
+			if (ReadPackCell(pack))
+			{
+				PbSetInt(bf, "ent_idx", client);
+				PbSetBool(bf, "chat", bChat);
 
-			PbSetString(bf, "msg_name", sTranslation);
-			PbAddString(bf, "params", "");
-			PbAddString(bf, "params", "");
-			PbAddString(bf, "params", "");
-			PbAddString(bf, "params", "");
+				PbSetString(bf, "msg_name", sTranslation);
+				PbAddString(bf, "params", "");
+				PbAddString(bf, "params", "");
+				PbAddString(bf, "params", "");
+				PbAddString(bf, "params", "");
+			}
+			else
+			{
+				BfWriteByte(bf, client);
+				BfWriteByte(bf, bChat);
+				BfWriteString(bf, sTranslation);
+			}
+			EndMessage();
 		}
 		else
 		{
-			BfWriteByte(bf, client);
-			BfWriteByte(bf, bChat);
-			BfWriteString(bf, sTranslation);
+			new client = ReadPackCell(pack);
+			new numClientsStart = ReadPackCell(pack);
+			new numClientsFinish;
+			new clients[numClientsStart];
+
+			for (new x = 0; x < numClientsStart; x++)
+			{
+				new buffer = ReadPackCell(pack);
+				if (IsValidClient(buffer))
+				{
+					clients[numClientsFinish++] = buffer;
+				}
+			}
+			
+			decl String:sPrefix[MAXLENGTH_NAME];
+			decl String:sSenderName[MAXLENGTH_NAME];
+			decl String:sMessage[MAXLENGTH_INPUT];
+			ReadPackString(pack, sPrefix, sizeof(sPrefix));
+			ReadPackString(pack, sSenderName, sizeof(sSenderName));
+			ReadPackString(pack, sMessage, sizeof(sMessage));
+			
+			decl String:message[MAXLENGTH_MESSAGE];
+			
+			new teamColor;
+			switch (GetClientTeam(client))
+			{
+				case 0, 1: teamColor = 0xCCCCCC;
+				case 2: teamColor = 0x4D7942;
+				case 3: teamColor = 0xFF4040;
+			}
+			
+			decl String:buffer[32];
+			Format(buffer, sizeof(buffer), "\x07%06X", teamColor);
+			ReplaceString(sSenderName, sizeof(sSenderName), "\x03", buffer);
+			ReplaceString(sMessage, sizeof(sMessage), "\x03", buffer);
+			
+			Format(message, sizeof(message), "\x01%s%s\x01: %s", sPrefix, sSenderName, sMessage);
+			PrintToServer(message);
+			
+			for (new j = 0; j < numClientsFinish; j++)
+			{
+				PrintToChat(clients[j], "%s", message);
+			}
 		}
-		EndMessage();
 		
 		CloseHandle(pack);
 
