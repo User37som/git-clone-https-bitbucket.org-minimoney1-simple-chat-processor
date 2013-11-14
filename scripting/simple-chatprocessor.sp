@@ -816,7 +816,7 @@ stock eMods:GetCurrentMod()
 	}
 	if (StrEqual(sGameType, "hl2mp", false))
 	{
-		return GameType_FF;
+		return GameType_HL2DM;
 	}
 	if (StrEqual(sGameType, "insurgency", false) || StrEqual(sGameType, "ins", false))
 	{
