@@ -38,7 +38,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"2.0.0"
+#define PLUGIN_VERSION				"2.0.1"
 #define SENDER_WORLD			0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
 #define MAXLENGTH_NAME			64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
@@ -52,7 +52,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 
 #define ADDSTRING(%1) SetTrieValue(g_hChatFormats, %1, 1)
 
-#define UPDATE_URL "http://dev.xadgaming.com/simple-chat-processor/raw/master/updater.txt"
+#define UPDATE_URL "http://dl.dropboxusercontent.com/u/83581539/ChatProcessor/updater.txt"
 
 enum eMods
 {
