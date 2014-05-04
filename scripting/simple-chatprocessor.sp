@@ -38,7 +38,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"2.0.1"
+#define PLUGIN_VERSION				"2.0.2"
 #define SENDER_WORLD			0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
 #define MAXLENGTH_NAME			64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
