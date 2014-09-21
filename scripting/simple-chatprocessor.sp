@@ -38,7 +38,7 @@ $Copyright: (c) Simple Plugins 2008-2009$
 #undef REQUIRE_PLUGIN
 #include <updater>
 
-#define PLUGIN_VERSION				"2.0.2"
+#define PLUGIN_VERSION				"2.1.0"
 #define SENDER_WORLD			0
 #define MAXLENGTH_INPUT			128 	// Inclues \0 and is the size of the chat input box.
 #define MAXLENGTH_NAME			64		// This is backwords math to get compability.  Sourcemod has it set at 32, but there is room for more.
@@ -99,6 +99,7 @@ new String:g_sGameName[eMods][32] =
 
 new Handle:g_hChatFormats = INVALID_HANDLE;
 new Handle:g_fwdOnChatMessage;
+new Handle:g_fwdOnChatMessagePost;
 
 new bool:g_bSayText2;
 new	bool:g_bAutoUpdate;
@@ -189,9 +190,10 @@ public OnPluginStart()
 	}
 
 	/**
-	Create the global forward for other plugins
+	Create the global forwards for other plugins
 	*/
 	g_fwdOnChatMessage = CreateGlobalForward("OnChatMessage", ET_Hook, Param_CellByRef, Param_Cell, Param_String, Param_String);
+	g_fwdOnChatMessagePost = CreateGlobalForward("OnChatMessage_Post", ET_Ignore, Param_Cell, Param_Cell, Param_String, Param_String);
 
 	g_hDPArray = CreateArray();
 }
@@ -384,6 +386,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	Call_PushStringEx(cpMessage, sizeof(cpMessage), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	new fError = Call_Finish(fResult);
 	
+	new chatFlags = g_CurrentChatType;
 	g_CurrentChatType = CHATFLAGS_INVALID;
 	
 	if (fError != SP_ERROR_NONE)
@@ -444,6 +447,7 @@ public Action:OnSayText2(UserMsg:msg_id, Handle:bf, const clients[], numClients,
 	WritePackString(cpPack, cpMessage);
 	PushArrayCell(g_hDPArray, cpPack);
 	WritePackCell(cpPack, bProtobuf);
+	WritePackCell(cpPack, chatFlags);
 
 	CloseHandle(cpRecipients);
 	
@@ -552,6 +556,7 @@ public Action:OnSayText(UserMsg:msg_id, Handle:bf, const clients[], numClients, 
 	Call_PushStringEx(textMessage, sizeof(textMessage), SM_PARAM_STRING_UTF8|SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK);
 	new fError = Call_Finish(fResult);
 	
+	new chatFlags = g_CurrentChatType;
 	g_CurrentChatType = CHATFLAGS_INVALID;
 	
 	if (fError != SP_ERROR_NONE)
@@ -608,7 +613,8 @@ public Action:OnSayText(UserMsg:msg_id, Handle:bf, const clients[], numClients, 
 	WritePackString(cpPack, senderName);
 	WritePackString(cpPack, textMessage);
 	PushArrayCell(g_hDPArray, cpPack);
-	WritePackCell(cpPack, bProtobuf);
+	// We don't care about saving bProtobuf since we print SayText messages with PrintToChat
+	WritePackCell(cpPack, chatFlags);
 
 	CloseHandle(cpRecipients);
 	
@@ -624,9 +630,12 @@ public OnGameFrame()
 	{
 		new Handle:pack = GetArrayCell(g_hDPArray, i);
 		ResetPack(pack);
+		
+		decl String:sSenderName[MAXLENGTH_NAME], String:sMessage[MAXLENGTH_INPUT];
+		new client, Handle:recipients = CreateArray();
 		if (g_bSayText2)
 		{
-			new client = ReadPackCell(pack);
+			client = ReadPackCell(pack);
 			new numClientsStart = ReadPackCell(pack);
 			new numClientsFinish;
 			new clients[numClientsStart];
@@ -637,13 +646,12 @@ public OnGameFrame()
 				if (IsValidClient(buffer))
 				{
 					clients[numClientsFinish++] = buffer;
+					PushArrayCell(recipients, buffer);
 				}
 			}
 			
 			new bool:bChat = bool:ReadPackCell(pack);
 			decl String:sChatType[32];
-			decl String:sSenderName[MAXLENGTH_NAME];
-			decl String:sMessage[MAXLENGTH_INPUT];
 			ReadPackString(pack, sChatType, sizeof(sChatType));
 			ReadPackString(pack, sSenderName, sizeof(sSenderName));
 			ReadPackString(pack, sMessage, sizeof(sMessage));
@@ -674,7 +682,7 @@ public OnGameFrame()
 		}
 		else
 		{
-			new client = ReadPackCell(pack);
+			client = ReadPackCell(pack);
 			new numClientsStart = ReadPackCell(pack);
 			new numClientsFinish;
 			new clients[numClientsStart];
@@ -685,12 +693,11 @@ public OnGameFrame()
 				if (IsValidClient(buffer))
 				{
 					clients[numClientsFinish++] = buffer;
+					PushArrayCell(recipients, buffer);
 				}
 			}
 			
 			decl String:sPrefix[MAXLENGTH_NAME];
-			decl String:sSenderName[MAXLENGTH_NAME];
-			decl String:sMessage[MAXLENGTH_INPUT];
 			ReadPackString(pack, sPrefix, sizeof(sPrefix));
 			ReadPackString(pack, sSenderName, sizeof(sSenderName));
 			ReadPackString(pack, sMessage, sizeof(sMessage));
@@ -719,6 +726,17 @@ public OnGameFrame()
 			}
 		}
 		
+		g_CurrentChatType = ReadPackCell(pack);
+		Call_StartForward(g_fwdOnChatMessagePost);
+		Call_PushCell(client);
+		Call_PushCell(recipients);
+		Call_PushString(sSenderName);
+		Call_PushString(sMessage);
+		Call_Finish();
+		g_CurrentChatType = CHATFLAGS_INVALID;
+		
+		
+		CloseHandle(recipients);
 		CloseHandle(pack);
 
 		RemoveFromArray(g_hDPArray, i);
